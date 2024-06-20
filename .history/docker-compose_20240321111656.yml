@@ -1,0 +1,12 @@
+version: '3'
+
+services:
+  pocpdvadminrabbitmq:
+    build: .
+    container_name: NOME_DO_PROJETO
+    entrypoint: ./.docker/entrypoint.sh
+    volumes:
+      - .:/home/node/app
+    ports:
+      - '9229:9229'
+      - '${PORT}:${PORT}'

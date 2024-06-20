@@ -1,0 +1,116 @@
+name: Publish Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run_check_changes:
+    name: Run check changes
+    if: github.ref == 'refs/heads/main'
+    uses: vrsoftbr/VRMobileReusableWorkflows/.github/workflows/check-changes.yml@main
+    secrets:
+      VR_PACKAGE_TOKEN: ${{ secrets.VRPACKAGETOKEN }}
+
+  run_generate_new_tag:
+    name: Run generate new Tag
+    uses: vrsoftbr/VRMobileReusableWorkflows/.github/workflows/generate-new-tag.yml@main
+    needs: run_check_changes
+    if: needs.run_check_changes.outputs.HAS_CHANGES
+    secrets:
+      VR_PACKAGE_TOKEN: ${{ secrets.VRPACKAGETOKEN }}
+    with:
+      LAST_VERSION: ${{ needs.run_check_changes.outputs.LAST_VERSION }}
+      COMMIT_MESSAGES: ${{ needs.run_check_changes.outputs.COMMIT_MESSAGES }}
+
+  publish-release:
+    name: Publicar nova versão
+    needs:
+      - run_check_changes
+      - run_generate_new_tag
+    if: needs.run_check_changes.outputs.HAS_CHANGES && needs.run_generate_new_tag.outputs.HAS_NEW_RELEASE
+
+    runs-on: mob-1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.VRPACKAGETOKEN }}
+          fetch-depth: 0
+          ref: main
+
+      - name: Git Config
+        run: git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com" && git config --global user.name "${GITHUB_ACTOR}"
+
+      - name: Upgrade release on packages
+        id: upgrade_release_package
+        run: |
+          HAS_NEW_RELEASE=${{ needs.run_generate_new_tag.outputs.HAS_NEW_RELEASE }}
+          NEW_VERSION=${{ needs.run_generate_new_tag.outputs.NEW_VERSION }}
+
+          npm --no-git-tag-version version $NEW_VERSION
+          git add . 
+          git commit -m "ci: Entrega da versão $NEW_VERSION"
+          git push
+
+      - name: Publish Release
+        id: publish-release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.VRPACKAGETOKEN }}
+        with:
+          tag_name: v${{ needs.run_generate_new_tag.outputs.NEW_VERSION }}
+          release_name: Release v${{ needs.run_generate_new_tag.outputs.NEW_VERSION }}
+          commitish: main
+
+  run-keep-up-to-date:
+    name: Manter homolog em dia
+    uses: vrsoftbr/VRMobileReusableWorkflows/.github/workflows/keep-up-to-date.yml@main
+    needs:
+      - run_check_changes
+      - run_generate_new_tag
+      - publish-release
+    if: needs.run_generate_new_tag.outputs.HAS_NEW_RELEASE
+    secrets:
+      VR_PACKAGE_TOKEN: ${{ secrets.VRPACKAGETOKEN }}
+    with:
+      BRANCH: "homolog"
+
+  run_jira_issue_release:
+    name: Run Jira Integration
+    uses: vrsoftbr/VRMobileReusableWorkflows/.github/workflows/jira_issue_release.yml@main
+    needs:
+      - run_check_changes
+      - run_generate_new_tag
+      - publish-release
+    if: needs.run_check_changes.outputs.HAS_CHANGES && needs.run_generate_new_tag.outputs.HAS_NEW_RELEASE
+    secrets:
+      VR_PACKAGE_TOKEN: ${{ secrets.VRPACKAGETOKEN }}
+      JIRA_API_TOKEN: ${{ secrets.VRJIRAAPITOKEN }}
+      JIRA_BASE_URL: ${{ vars.VRJIRAURL }}
+      JIRA_USER_EMAIL: ${{ vars.VRJIRAEMAIL }}
+    with:
+      JIRA_ISSUE_PREFIX: "MOB"
+      COMMIT_MESSAGES: ${{ needs.run_check_changes.outputs.COMMIT_MESSAGES }}
+      NEW_VERSION: ${{ needs.run_generate_new_tag.outputs.NEW_VERSION }}
+      HAS_NEW_RELEASE: ${{ needs.run_generate_new_tag.outputs.HAS_NEW_RELEASE }}
+
+  run_release_notes:
+    name: Run release notes
+    uses: vrsoftbr/VRMobileReusableWorkflows/.github/workflows/release-notes-from-github-wiki.yml@main
+    needs:
+      - run_check_changes
+      - run_generate_new_tag
+      - publish-release
+      - run_jira_issue_release
+    if: needs.run_check_changes.outputs.HAS_CHANGES && needs.run_generate_new_tag.outputs.HAS_NEW_RELEASE
+    secrets:
+      VR_PACKAGE_TOKEN: ${{ secrets.VRPACKAGETOKEN }}
+    with:
+      GITHUB_REPOSITORY: $GITHUB_REPOSITORY
+      NEW_VERSION: ${{ needs.run_generate_new_tag.outputs.NEW_VERSION }}
+      BUG_FIX_INFO: ${{ needs.run_jira_issue_release.outputs.BUG_FIX_INFO }}
+      FEAT_INFO: ${{ needs.run_jira_issue_release.outputs.FEAT_INFO }}
+      BREAKING_CHANGE_INFO: ${{ needs.run_jira_issue_release.outputs.BREAKING_CHANGE_INFO }}
+      TEC_NOTE_INFO: ${{ needs.run_jira_issue_release.outputs.TEC_NOTE_INFO }}
+      JIRA_ISSUE_KEYS: ${{ needs.run_jira_issue_release.outputs.ISSUE_KEYS }}

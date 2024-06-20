@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug POC-PdvAdminRabbitMQ",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "address": "0.0.0.0",
+      "restart": true,
+      "sourceMaps": true,
+      "localRoot": "${workspaceFolder}/",
+      "skipFiles": ["<node_internals>/**", "node_modules/**"],
+      "sourceMapPathOverrides": {
+        "/home/node/app/*": "${workspaceRoot}/*"
+      },
+      "remoteRoot": "/home/node/app/"
+    }
+  ]
+}

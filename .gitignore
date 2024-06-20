@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.npmrc
+
+#Tests
+coverage/
+.env
+
+# Dev Environment
+.docker/zsh/history/

@@ -1,0 +1,20 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+protected_branches="main homolog"
+current_branch=$(git symbolic-ref --short HEAD)
+protected=false
+
+for branch in $protected_branches; do
+  if [ "$branch" = "$current_branch" ]; then
+    protected=true
+    break
+  fi
+done
+
+if $protected; then
+  echo "Commits diretos na branch $current_branch não são permitidos."
+  exit 1
+fi
+
+npx lint-staged 
