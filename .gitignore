@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .npmrc
+.history
 
 #Tests
 coverage/
